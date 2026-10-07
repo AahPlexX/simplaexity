@@ -1,5 +1,15 @@
 # Decisions
 
+## 2026-10-07 — Serialize controller-process run operations
+
+**Decision:** All run reads and read-modify-write mutations invoked through the MCP server pass through one process-local `RunService` serialization boundary.
+
+**Rationale:** MCP clients can issue tool calls in parallel. Without serialization, two asynchronous handlers can load the same file-backed snapshot, mutate independent state, and let the later save overwrite the earlier update. Lease fencing prevents false completion but does not prevent lost progress. Serializing operations preserves single-process state updates without introducing distributed infrastructure before it is required.
+
+**Verification:** GitHub Actions run `37668477139` on revision `8dc253a22a0e5f14b15784bbe9c3557d8347eec7` passed 15/15 tests, including concurrent independent claims that must both remain present in the final snapshot.
+
+**Migration trigger:** Before multiple controller processes, replicas, or external writers are enabled, replace process-local serialization plus file storage with transactional shared storage that preserves fencing and compare-and-swap semantics.
+
 ## 2026-10-07 — Reproducible dependency and CI execution
 
 **Decision:** Commit the byte-exact pnpm-generated lockfile, install with `pnpm install --frozen-lockfile` in CI, and pin third-party GitHub Actions by full commit SHA while retaining the human-readable release tag as a comment.
@@ -28,6 +38,6 @@
 
 ## 2026-10-06 — File persistence first
 
-**Decision:** Use atomic JSON file replacement with one controller writer process for the foundation.
+**Decision:** Use atomic JSON file replacement with one controller process for the foundation, with process-local serialized access to the run store.
 
 **Migration trigger:** Before multi-process/multi-replica controller writes, move to transactional shared storage with compare-and-swap/fencing semantics.
