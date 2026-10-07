@@ -10,7 +10,7 @@ project_identity:
   slug: "simplaexity"
   development_status: "In Progress"
   current_phase: "Controller Foundation"
-  last_updated: "2026-10-06"
+  last_updated: "2026-10-07"
 
 status_contract:
   allowed_feature_statuses: ["Planned", "In Progress", "Blocked", "Verification Pending", "Complete"]
@@ -25,6 +25,7 @@ technical_foundation:
     - "@types/node@24.19.1"
   package_manager: "pnpm@12.10.1"
   runtime: "Node.js 24.21.0 LTS"
+  reproducibility: "Committed pnpm lockfile; CI installs with --frozen-lockfile; third-party GitHub Actions are pinned by full commit SHA."
 
 core_feature_specifications:
   - name: "Dependency-Gated Run Controller"
@@ -40,11 +41,11 @@ core_feature_specifications:
   - name: "Fenced Execution Leases"
     id: "FND-002"
     details:
-      purpose: "Prevent duplicate or superseded workers from completing a newer execution attempt."
+      purpose: "Prevent duplicate, expired, or superseded workers from completing work outside the currently valid execution attempt."
       inputs_parameters: "nodeId, workerId, timestamp, lease TTL"
       dependencies_touched: "Node.js crypto randomUUID"
-      technical_notes_edge_cases: "Expired leases may be superseded; superseded lease IDs cannot mutate the node."
-      acceptance_criteria: "Only the current lease may verify or fail a running node."
+      technical_notes_edge_cases: "An expired lease is stale immediately, even before replacement; expired leases may be reclaimed into a newer attempt; superseded lease IDs cannot mutate the node."
+      acceptance_criteria: "Only the current, unexpired lease may verify or fail a running node."
     feature_development_status: "Verification Pending"
 
   - name: "Evidence-Bound Completion and Invalidation"
