@@ -26,7 +26,8 @@ technical_foundation:
   package_manager: "pnpm@12.10.1"
   runtime: "Node.js 24.21.0 LTS"
   reproducibility: "Committed byte-exact pnpm lockfile; CI installs with --frozen-lockfile; third-party GitHub Actions are pinned by full commit SHA."
-  verification_baseline: "Revision ea0692174b80b2c75e30e71a63c1f5dc140b44d1; GitHub Actions run 37667444174; frozen install and pnpm supply-chain policy verification passed; strict typecheck passed; 14/14 tests passed."
+  concurrency_model: "One controller process may receive parallel MCP calls; RunService serializes run reads and read-modify-write mutations so file-backed snapshots do not lose concurrent updates. Multi-process/multi-replica writes remain out of scope."
+  verification_baseline: "Revision 8dc253a22a0e5f14b15784bbe9c3557d8347eec7; GitHub Actions run 37668477139; frozen install and pnpm supply-chain policy verification passed; strict typecheck passed; 15/15 tests passed."
 
 core_feature_specifications:
   - name: "Dependency-Gated Run Controller"
@@ -37,7 +38,7 @@ core_feature_specifications:
       dependencies_touched: "Node.js standard library only"
       technical_notes_edge_cases: "Reject missing dependencies, cycles, duplicate node IDs, and nodes with zero acceptance checks."
       acceptance_criteria: "Blocked/ready transitions are deterministic and invalid graphs fail closed."
-      verification_evidence: "Run 37667444174 on revision ea0692174b80b2c75e30e71a63c1f5dc140b44d1."
+      verification_evidence: "Run 37668477139 on revision 8dc253a22a0e5f14b15784bbe9c3557d8347eec7."
     feature_development_status: "Complete"
 
   - name: "Fenced Execution Leases"
@@ -48,7 +49,7 @@ core_feature_specifications:
       dependencies_touched: "Node.js crypto randomUUID"
       technical_notes_edge_cases: "An expired lease is stale immediately, even before replacement; expired leases may be reclaimed into a newer attempt; superseded lease IDs cannot mutate the node."
       acceptance_criteria: "Only the current, unexpired lease may verify or fail a running node."
-      verification_evidence: "Run 37667444174 includes passing expired-lease and superseded-lease regression cases."
+      verification_evidence: "Run 37668477139 includes passing expired-lease and superseded-lease regression cases."
     feature_development_status: "Complete"
 
   - name: "Evidence-Bound Completion and Invalidation"
@@ -59,18 +60,18 @@ core_feature_specifications:
       dependencies_touched: "Controller state machine"
       technical_notes_edge_cases: "Every declared check must appear exactly once, pass, and bind to the same candidate revision; changed prerequisites stale descendants."
       acceptance_criteria: "Missing, failed, duplicate, or cross-revision evidence cannot verify a node."
-      verification_evidence: "Run 37667444174 includes passing evidence-fail-closed and descendant-invalidation cases."
+      verification_evidence: "Run 37668477139 includes passing evidence-fail-closed and descendant-invalidation cases."
     feature_development_status: "Complete"
 
   - name: "Durable Run State"
     id: "FND-004"
     details:
-      purpose: "Keep controller state outside chat/session context so interrupted work can resume."
+      purpose: "Keep controller state outside chat/session context so interrupted work can resume without losing concurrent single-process mutations."
       inputs_parameters: "run snapshot and run ID"
-      dependencies_touched: "Node.js filesystem/path/crypto"
-      technical_notes_edge_cases: "Atomic temp-file replacement; encoded filenames prevent run IDs from escaping the store directory. Foundation supports one controller writer process."
-      acceptance_criteria: "A saved run reloads unchanged after a new store instance is created."
-      verification_evidence: "Run 37667444174 includes passing persistence, restart, missing-run, and path-containment cases."
+      dependencies_touched: "Node.js filesystem/path/crypto; RunService serialization boundary"
+      technical_notes_edge_cases: "Atomic temp-file replacement; encoded filenames prevent run IDs from escaping the store directory; process-local serialization prevents parallel MCP read-modify-write operations from overwriting one another. Multi-process writers require transactional shared storage."
+      acceptance_criteria: "A saved run reloads unchanged after a new store instance is created, and concurrent mutations inside one controller process preserve both updates."
+      verification_evidence: "Run 37668477139 includes passing persistence, restart, missing-run, path-containment, and concurrent-mutation preservation cases."
     feature_development_status: "Complete"
 
   - name: "Worker-Safe MCP Surface"
@@ -78,10 +79,10 @@ core_feature_specifications:
     details:
       purpose: "Expose bounded run operations through the official MCP SDK without giving workers authority to approve their own completion."
       inputs_parameters: "MCP tool inputs for create/read/claim/fail/invalidate"
-      dependencies_touched: "@modelcontextprotocol/server, zod"
-      technical_notes_edge_cases: "No public verify_node tool in the worker surface; serveStdio supports modern 2026-07-28 and legacy-era openings."
-      acceptance_criteria: "Registered public tool list is explicit and omits verification authority."
-      verification_evidence: "Run 37667444174 includes passing public-surface and official-MCP-server-instance cases."
+      dependencies_touched: "@modelcontextprotocol/server, zod, RunService"
+      technical_notes_edge_cases: "No public verify_node tool in the worker surface; serveStdio supports modern 2026-07-28 and legacy-era openings; tool operations route through the single-process serialization boundary."
+      acceptance_criteria: "Registered public tool list is explicit and omits verification authority; parallel tool calls cannot lose run mutations within one controller process."
+      verification_evidence: "Run 37668477139 includes passing public-surface, official-MCP-server-instance, and concurrent-mutation cases."
     feature_development_status: "Complete"
 
   - name: "Trusted Verification Boundary"
