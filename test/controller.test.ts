@@ -77,3 +77,39 @@ test('failed work stays failed and does not unlock dependents', () => {
   assert.equal(controller.getNode('a').lastFailure, 'build failed');
   assert.equal(controller.getNode('b').status, 'blocked');
 });
+
+test('rejects non-finite mutation timestamps before state changes', () => {
+  const claimController = RunController.create({ projectId: 'p', runId: 'claim', sourceRevision: 'abc', nodes: [node('a')] });
+  const beforeClaim = claimController.snapshot();
+  assert.throws(
+    () => claimController.claimNode('a', 'worker', Number.NaN, 60_000),
+    (error: unknown) => error instanceof ControllerError && error.code === 'INVALID_TRANSITION'
+  );
+  assert.deepEqual(claimController.snapshot(), beforeClaim);
+
+  const verifyController = RunController.create({ projectId: 'p', runId: 'verify', sourceRevision: 'abc', nodes: [node('a')] });
+  const verifyLease = verifyController.claimNode('a', 'worker', 1_000, 60_000);
+  const beforeVerify = verifyController.snapshot();
+  assert.throws(
+    () => verifyController.verifyNode('a', verifyLease.id, 'candidate-1', [pass('a:accept')], Number.NaN),
+    (error: unknown) => error instanceof ControllerError && error.code === 'INVALID_TRANSITION'
+  );
+  assert.deepEqual(verifyController.snapshot(), beforeVerify);
+
+  const failController = RunController.create({ projectId: 'p', runId: 'fail', sourceRevision: 'abc', nodes: [node('a')] });
+  const failLease = failController.claimNode('a', 'worker', 1_000, 60_000);
+  const beforeFail = failController.snapshot();
+  assert.throws(
+    () => failController.failNode('a', failLease.id, 'build failed', Number.NaN),
+    (error: unknown) => error instanceof ControllerError && error.code === 'INVALID_TRANSITION'
+  );
+  assert.deepEqual(failController.snapshot(), beforeFail);
+});
+
+test('validates a very deep acyclic graph without depending on the JavaScript call stack', () => {
+  const depth = 20_000;
+  const nodes = Array.from({ length: depth }, (_, index) => node(`n${index}`, index === depth - 1 ? [] : [`n${index + 1}`]));
+  const controller = RunController.create({ projectId: 'p', runId: 'deep', sourceRevision: 'abc', nodes });
+  assert.equal(controller.getNode(`n${depth - 1}`).status, 'ready');
+  assert.equal(controller.getNode('n0').status, 'blocked');
+});
