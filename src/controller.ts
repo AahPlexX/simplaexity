@@ -112,6 +112,7 @@ export class RunController {
   }
 
   claimNode(nodeId: string, workerId: string, now: number, ttlMs: number): ExecutionLease {
+    requireFiniteTimestamp(now);
     if (!workerId.trim()) throw new ControllerError('INVALID_TRANSITION', 'Worker id is required.');
     if (!Number.isFinite(ttlMs) || ttlMs <= 0) throw new ControllerError('INVALID_TRANSITION', 'Lease TTL must be greater than zero.');
 
@@ -139,6 +140,7 @@ export class RunController {
   }
 
   verifyNode(nodeId: string, leaseId: string, candidateRevision: string, evidence: EvidenceReceipt[], now = Date.now()): void {
+    requireFiniteTimestamp(now);
     const node = this.requireCurrentLease(nodeId, leaseId, now);
     validateEvidence(node, candidateRevision, evidence);
     node.status = 'verified';
@@ -152,6 +154,7 @@ export class RunController {
   }
 
   failNode(nodeId: string, leaseId: string, reason: string, now = Date.now()): void {
+    requireFiniteTimestamp(now);
     const node = this.requireCurrentLease(nodeId, leaseId, now);
     if (!reason.trim()) throw new ControllerError('INVALID_TRANSITION', 'Failure reason is required.');
     node.status = 'failed';
@@ -215,32 +218,44 @@ export class RunController {
 
 function validateGraph(nodes: readonly NodeDefinition[]): void {
   const ids = new Set<string>();
+  const indegree = new Map<string, number>();
+  const dependents = new Map<string, string[]>();
+
   for (const node of nodes) {
     if (!node.id.trim()) throw invalidGraph('Node id is required.');
     if (ids.has(node.id)) throw invalidGraph(`Duplicate node id ${node.id}.`);
     if (node.acceptanceChecks.length === 0) throw invalidGraph(`Node ${node.id} has no acceptance checks.`);
     if (new Set(node.acceptanceChecks).size !== node.acceptanceChecks.length) throw invalidGraph(`Node ${node.id} has duplicate acceptance checks.`);
     ids.add(node.id);
+    indegree.set(node.id, node.dependsOn.length);
+    dependents.set(node.id, []);
   }
 
   for (const node of nodes) {
     for (const dependency of node.dependsOn) {
       if (!ids.has(dependency)) throw invalidGraph(`Node ${node.id} depends on missing node ${dependency}.`);
+      dependents.get(dependency)?.push(node.id);
     }
   }
 
-  const visiting = new Set<string>();
-  const visited = new Set<string>();
-  const byId = new Map(nodes.map((node) => [node.id, node]));
-  const visit = (nodeId: string): void => {
-    if (visiting.has(nodeId)) throw invalidGraph(`Dependency cycle includes ${nodeId}.`);
-    if (visited.has(nodeId)) return;
-    visiting.add(nodeId);
-    for (const dependency of byId.get(nodeId)?.dependsOn ?? []) visit(dependency);
-    visiting.delete(nodeId);
-    visited.add(nodeId);
-  };
-  for (const node of nodes) visit(node.id);
+  const ready: string[] = [];
+  for (const [nodeId, degree] of indegree) {
+    if (degree === 0) ready.push(nodeId);
+  }
+
+  let processed = 0;
+  for (let cursor = 0; cursor < ready.length; cursor += 1) {
+    const nodeId = ready[cursor];
+    if (nodeId === undefined) continue;
+    processed += 1;
+    for (const dependentId of dependents.get(nodeId) ?? []) {
+      const nextDegree = (indegree.get(dependentId) ?? 0) - 1;
+      indegree.set(dependentId, nextDegree);
+      if (nextDegree === 0) ready.push(dependentId);
+    }
+  }
+
+  if (processed !== nodes.length) throw invalidGraph('Dependency graph contains a cycle.');
 }
 
 function validateEvidence(node: NodeRecord, candidateRevision: string, evidence: readonly EvidenceReceipt[]): void {
@@ -257,6 +272,10 @@ function validateEvidence(node: NodeRecord, candidateRevision: string, evidence:
     if (!receipt || receipt.outcome !== 'passed') throw new ControllerError('INVALID_EVIDENCE', `Required check ${checkId} did not pass.`);
     if (receipt.candidateRevision !== candidateRevision) throw new ControllerError('INVALID_EVIDENCE', `Required check ${checkId} is bound to a different revision.`);
   }
+}
+
+function requireFiniteTimestamp(now: number): void {
+  if (!Number.isFinite(now)) throw new ControllerError('INVALID_TRANSITION', 'Timestamp must be a finite number.');
 }
 
 function copyDefinition(definition: NodeDefinition): NodeDefinition {
