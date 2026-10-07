@@ -1,19 +1,19 @@
 # Status
 
-Last updated: 2026-10-06 (America/Chicago)
+Last updated: 2026-10-07 (America/Chicago)
 
 ## Current phase
 
-**Controller Foundation — review hardening RED.**
+**Controller Foundation — reproducibility closeout; final exact-revision verification pending.**
 
-Baseline evidence: GitHub Actions run `37554719232` passed strict typecheck and 13/13 tests on revision `6ce4a1e9d4a3574d93cfc919b949b9adb97e6f84`.
+Baseline functional evidence: GitHub Actions run `37555359325` passed strict typecheck and 14/14 tests on revision `337c44af2402a4536308e8e6addfc7cc6106479f`, including the regression that prevents an expired lease from verifying or failing even before replacement.
 
-Branch review then identified one correctness gap in FND-002: an execution lease that had expired but had not yet been superseded could still verify or fail its node. A new regression test now requires expiration itself to fence the worker out.
+Reproducibility closeout now adds the exact pnpm-generated project lockfile, changes CI installation to `pnpm install --frozen-lockfile`, removes the temporary lockfile-capture artifact step, and pins third-party GitHub Actions by full commit SHA.
 
 ## Current gate
 
-The new expired-lease contract must fail against the existing implementation, then the minimal controller change must make the complete suite green. FND-001 through FND-005 remain `Verification Pending` until the final exact branch revision passes CI with a committed frozen lockfile.
+Run GitHub Actions on the exact closeout revision. FND-001 through FND-005 remain `Verification Pending` until that revision passes frozen-lockfile installation, strict typecheck, and the complete test suite. After a green run, synchronize `PRD.md`, `TODO.md`, `CHANGELOG.md`, and this status document before merge, then verify the documentation-only closeout revision as well.
 
 ## Next frontier
 
-After the controller-foundation branch is hardened, locked, reviewed, and merged: implement the trusted verifier boundary and candidate-submission contract, then execute controller failure-injection qualification before autonomous publishing.
+After the controller-foundation branch is hardened, locked, reviewed, documented, verified, and merged: implement the trusted verifier boundary and candidate-submission contract, then execute controller failure-injection qualification before autonomous publishing.
