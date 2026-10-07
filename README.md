@@ -4,9 +4,9 @@ Simplaexity is an evidence-gated execution controller for AI-assisted software w
 
 ## Foundation profile
 
-The first qualified profile targets single-repository TypeScript web applications. Current foundation capabilities cover dependency-graph validation, fenced execution leases, revision-bound evidence rules, descendant invalidation, durable run snapshots, and a worker-facing MCP stdio adapter that deliberately omits verification authority.
+The first qualified profile targets single-repository TypeScript web applications. Verified controller-foundation capabilities cover dependency-graph validation, fenced execution leases, revision-bound evidence rules, descendant invalidation, durable run snapshots, and a worker-facing MCP stdio adapter that deliberately omits verification authority.
 
-Autonomous production database migrations, real payments, arbitrary infrastructure administration, and autonomous publishing remain out of scope until dedicated adapters and recovery procedures are qualified.
+Autonomous production database migrations, real payments, arbitrary infrastructure administration, and autonomous publishing remain out of scope until dedicated adapters and recovery procedures are qualified. The trusted verification boundary and controller failure-injection qualification remain open project features.
 
 ## Toolchain
 
@@ -17,10 +17,10 @@ Autonomous production database migrations, real payments, arbitrary infrastructu
 - Zod 4.6.5
 
 ```bash
-pnpm install
+pnpm install --frozen-lockfile
 pnpm typecheck
 pnpm test
 pnpm start
 ```
 
-For project scope and current execution state, read `PRD.md` and `TODO.md`. Internal documentation is governed by `docs/DOCUMENTATION_STANDARD.md`.
+Use the committed lockfile for reproducible installation. For project scope and current execution state, read `PRD.md` and `TODO.md`. Internal documentation is governed by `docs/DOCUMENTATION_STANDARD.md`.
