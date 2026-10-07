@@ -12,7 +12,7 @@
 - [x] `@types/node@24.19.1`
 - [x] `pnpm@12.10.1`
 
-**Current Verification Baseline:** revision `ea0692174b80b2c75e30e71a63c1f5dc140b44d1`, GitHub Actions run `37667444174` — frozen install passed, pnpm supply-chain policy verification passed, strict TypeScript passed, 14/14 tests passed.
+**Current Verification Baseline:** revision `8dc253a22a0e5f14b15784bbe9c3557d8347eec7`, GitHub Actions run `37668477139` — frozen install passed, pnpm supply-chain policy verification passed, strict TypeScript passed, 15/15 tests passed.
 
 ---
 
@@ -24,7 +24,7 @@
   - [x] **Dependencies Touched:** Node.js standard library only.
   - [x] **Technical Notes & Edge Cases:** Missing dependency, cycle, duplicate ID, and zero-check cases covered by tests.
   - [x] **Implementation Details:** Controller state machine implemented in `src/controller.ts`.
-  - [x] **Verification & State Sign-off:** Verified by run `37667444174`.
+  - [x] **Verification & State Sign-off:** Verified by run `37668477139`.
 
 - [x] **Fenced Execution Leases** `{id: 'FND-002'}` — `Complete`
   - [x] **Purpose:** Prevent stale, expired, or superseded workers from completing work outside their execution lease.
@@ -32,7 +32,7 @@
   - [x] **Dependencies Touched:** Node.js `crypto.randomUUID`.
   - [x] **Technical Notes & Edge Cases:** Expired lease reclaim, direct post-expiry rejection, and superseded-lease rejection are regression-covered.
   - [x] **Implementation Details:** Lease issuance, attempt fencing, and expiry enforcement are centralized in the controller lease guard; MCP failure reporting supplies the current timestamp.
-  - [x] **Verification & State Sign-off:** Verified by run `37667444174`.
+  - [x] **Verification & State Sign-off:** Verified by run `37668477139`.
 
 - [x] **Evidence-Bound Completion and Invalidation** `{id: 'FND-003'}` — `Complete`
   - [x] **Purpose:** Require revision-bound acceptance evidence and stale affected descendants after upstream changes.
@@ -40,23 +40,23 @@
   - [x] **Dependencies Touched:** Controller state machine.
   - [x] **Technical Notes & Edge Cases:** Incomplete, failed, and cross-revision evidence handled fail-closed; descendant invalidation regression-covered.
   - [x] **Implementation Details:** Evidence validation and descendant invalidation implemented in `src/controller.ts`.
-  - [x] **Verification & State Sign-off:** Verified by run `37667444174`.
+  - [x] **Verification & State Sign-off:** Verified by run `37668477139`.
 
 - [x] **Durable Run State** `{id: 'FND-004'}` — `Complete`
-  - [x] **Purpose:** Persist run state independently of chat/session lifetime.
+  - [x] **Purpose:** Persist run state independently of chat/session lifetime without losing parallel single-process updates.
   - [x] **Inputs / Parameters:** run snapshot and run ID.
-  - [x] **Dependencies Touched:** Node.js filesystem/path/crypto.
-  - [x] **Technical Notes & Edge Cases:** Atomic replacement, restart restoration, missing-run handling, and run-ID path containment are covered.
-  - [x] **Implementation Details:** File store implemented in `src/store.ts`.
-  - [x] **Verification & State Sign-off:** Verified by run `37667444174`.
+  - [x] **Dependencies Touched:** Node.js filesystem/path/crypto plus `RunService` serialization.
+  - [x] **Technical Notes & Edge Cases:** Atomic replacement, restart restoration, missing-run handling, run-ID path containment, and parallel mutation preservation are covered. Multi-process writers remain out of scope pending transactional shared storage.
+  - [x] **Implementation Details:** File store lives in `src/store.ts`; serialized run access lives in `src/run-service.ts`.
+  - [x] **Verification & State Sign-off:** Verified by run `37668477139`, including the concurrent-mutation preservation case.
 
 - [x] **Worker-Safe MCP Surface** `{id: 'FND-005'}` — `Complete`
   - [x] **Purpose:** Expose bounded controller operations without worker self-approval.
   - [x] **Inputs / Parameters:** create/read/claim/fail/invalidate tool schemas.
-  - [x] **Dependencies Touched:** MCP SDK and Zod.
-  - [x] **Technical Notes & Edge Cases:** Public tool list explicitly excludes `verify_node`.
-  - [x] **Implementation Details:** MCP tools and stdio entry point implemented.
-  - [x] **Verification & State Sign-off:** Verified by run `37667444174`.
+  - [x] **Dependencies Touched:** MCP SDK, Zod, and `RunService`.
+  - [x] **Technical Notes & Edge Cases:** Public tool list explicitly excludes `verify_node`; MCP operations are serialized inside one controller process to prevent lost read-modify-write updates under parallel tool calls.
+  - [x] **Implementation Details:** MCP tools in `src/server.ts` delegate state access to `src/run-service.ts`; stdio entry point remains in `src/index.ts`.
+  - [x] **Verification & State Sign-off:** Verified by run `37668477139`.
 
 - [ ] **Trusted Verification Boundary** `{id: 'FND-006'}` — `Planned`
   - [ ] **Purpose:** Add a separately trusted evidence-submission authority.
@@ -81,12 +81,13 @@
 - [x] Commit byte-exact `pnpm-lock.yaml` generated by the verified dependency graph.
 - [x] CI uses `pnpm install --frozen-lockfile`.
 - [x] Third-party GitHub Actions are pinned to full commit SHAs.
-- [x] `pnpm typecheck` passes with zero TypeScript errors on revision `ea0692174b80b2c75e30e71a63c1f5dc140b44d1`.
-- [x] `pnpm test` passes 14/14 with zero failures on the same revision.
-- [x] GitHub Actions run `37667444174` is green on that exact revision.
+- [x] Serialize controller-process run reads and mutations to prevent lost updates under parallel MCP calls.
+- [x] `pnpm typecheck` passes with zero TypeScript errors on revision `8dc253a22a0e5f14b15784bbe9c3557d8347eec7`.
+- [x] `pnpm test` passes 15/15 with zero failures on the same revision.
+- [x] GitHub Actions run `37668477139` is green on that exact revision.
 - [x] FND-001 through FND-005 have executable verification evidence and are signed off `Complete`.
-- [ ] Final documentation-only closeout revision passes the same CI gate.
-- [ ] Integrate the verified controller-foundation branch into `main` through the repository integration workflow.
+- [ ] Final documentation-only closeout revision passes the same CI gate in both push and pull-request contexts.
+- [ ] Integrate PR #1 into `main` through the repository integration workflow.
 
 ## Project Completion Checklist
 
