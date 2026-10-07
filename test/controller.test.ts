@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { ControllerError, RunController, type NodeDefinition } from '../src/controller.js';
+import { ControllerError, RunController, type NodeDefinition, type RunSnapshot } from '../src/controller.js';
 
 const pass = (checkId: string, candidateRevision = 'candidate-1') => ({ checkId, outcome: 'passed' as const, candidateRevision, observedAt: '2026-10-06T19:00:00-05:00' });
 const node = (id: string, dependsOn: string[] = [], acceptanceChecks = [`${id}:accept`]): NodeDefinition => ({ id, kind: 'implementation', dependsOn, acceptanceChecks });
@@ -112,4 +112,38 @@ test('validates a very deep acyclic graph without depending on the JavaScript ca
   const controller = RunController.create({ projectId: 'p', runId: 'deep', sourceRevision: 'abc', nodes });
   assert.equal(controller.getNode(`n${depth - 1}`).status, 'ready');
   assert.equal(controller.getNode('n0').status, 'blocked');
+});
+
+test('restore rejects persisted snapshots that manufacture readiness or verification', () => {
+  const controller = RunController.create({ projectId: 'p', runId: 'restore', sourceRevision: 'abc', nodes: [node('a'), node('b', ['a'])] });
+  const forgedReady = controller.snapshot();
+  forgedReady.nodes[1]!.status = 'ready';
+  assert.throws(
+    () => RunController.restore(forgedReady),
+    (error: unknown) => error instanceof ControllerError && error.code === 'INVALID_SNAPSHOT'
+  );
+
+  const forgedVerified = controller.snapshot();
+  forgedVerified.nodes[0]!.status = 'verified';
+  assert.throws(
+    () => RunController.restore(forgedVerified),
+    (error: unknown) => error instanceof ControllerError && error.code === 'INVALID_SNAPSHOT'
+  );
+});
+
+test('restore rejects malformed persisted snapshot structure with a controller error', () => {
+  const malformed = {
+    schemaVersion: 1,
+    projectId: 'p',
+    runId: 'restore',
+    sourceRevision: 'abc',
+    createdAt: '2026-10-07T18:00:00.000Z',
+    updatedAt: '2026-10-07T18:00:00.000Z',
+    nodes: 'not-an-array'
+  } as unknown as RunSnapshot;
+
+  assert.throws(
+    () => RunController.restore(malformed),
+    (error: unknown) => error instanceof ControllerError && error.code === 'INVALID_SNAPSHOT'
+  );
 });
