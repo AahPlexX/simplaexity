@@ -25,7 +25,8 @@ technical_foundation:
     - "@types/node@24.19.1"
   package_manager: "pnpm@12.10.1"
   runtime: "Node.js 24.21.0 LTS"
-  reproducibility: "Committed pnpm lockfile; CI installs with --frozen-lockfile; third-party GitHub Actions are pinned by full commit SHA."
+  reproducibility: "Committed byte-exact pnpm lockfile; CI installs with --frozen-lockfile; third-party GitHub Actions are pinned by full commit SHA."
+  verification_baseline: "Revision ea0692174b80b2c75e30e71a63c1f5dc140b44d1; GitHub Actions run 37667444174; frozen install and pnpm supply-chain policy verification passed; strict typecheck passed; 14/14 tests passed."
 
 core_feature_specifications:
   - name: "Dependency-Gated Run Controller"
@@ -36,7 +37,8 @@ core_feature_specifications:
       dependencies_touched: "Node.js standard library only"
       technical_notes_edge_cases: "Reject missing dependencies, cycles, duplicate node IDs, and nodes with zero acceptance checks."
       acceptance_criteria: "Blocked/ready transitions are deterministic and invalid graphs fail closed."
-    feature_development_status: "Verification Pending"
+      verification_evidence: "Run 37667444174 on revision ea0692174b80b2c75e30e71a63c1f5dc140b44d1."
+    feature_development_status: "Complete"
 
   - name: "Fenced Execution Leases"
     id: "FND-002"
@@ -46,7 +48,8 @@ core_feature_specifications:
       dependencies_touched: "Node.js crypto randomUUID"
       technical_notes_edge_cases: "An expired lease is stale immediately, even before replacement; expired leases may be reclaimed into a newer attempt; superseded lease IDs cannot mutate the node."
       acceptance_criteria: "Only the current, unexpired lease may verify or fail a running node."
-    feature_development_status: "Verification Pending"
+      verification_evidence: "Run 37667444174 includes passing expired-lease and superseded-lease regression cases."
+    feature_development_status: "Complete"
 
   - name: "Evidence-Bound Completion and Invalidation"
     id: "FND-003"
@@ -56,7 +59,8 @@ core_feature_specifications:
       dependencies_touched: "Controller state machine"
       technical_notes_edge_cases: "Every declared check must appear exactly once, pass, and bind to the same candidate revision; changed prerequisites stale descendants."
       acceptance_criteria: "Missing, failed, duplicate, or cross-revision evidence cannot verify a node."
-    feature_development_status: "Verification Pending"
+      verification_evidence: "Run 37667444174 includes passing evidence-fail-closed and descendant-invalidation cases."
+    feature_development_status: "Complete"
 
   - name: "Durable Run State"
     id: "FND-004"
@@ -66,7 +70,8 @@ core_feature_specifications:
       dependencies_touched: "Node.js filesystem/path/crypto"
       technical_notes_edge_cases: "Atomic temp-file replacement; encoded filenames prevent run IDs from escaping the store directory. Foundation supports one controller writer process."
       acceptance_criteria: "A saved run reloads unchanged after a new store instance is created."
-    feature_development_status: "Verification Pending"
+      verification_evidence: "Run 37667444174 includes passing persistence, restart, missing-run, and path-containment cases."
+    feature_development_status: "Complete"
 
   - name: "Worker-Safe MCP Surface"
     id: "FND-005"
@@ -76,7 +81,8 @@ core_feature_specifications:
       dependencies_touched: "@modelcontextprotocol/server, zod"
       technical_notes_edge_cases: "No public verify_node tool in the worker surface; serveStdio supports modern 2026-07-28 and legacy-era openings."
       acceptance_criteria: "Registered public tool list is explicit and omits verification authority."
-    feature_development_status: "Verification Pending"
+      verification_evidence: "Run 37667444174 includes passing public-surface and official-MCP-server-instance cases."
+    feature_development_status: "Complete"
 
   - name: "Trusted Verification Boundary"
     id: "FND-006"
