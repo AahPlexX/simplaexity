@@ -138,8 +138,8 @@ export class RunController {
     return { ...lease };
   }
 
-  verifyNode(nodeId: string, leaseId: string, candidateRevision: string, evidence: EvidenceReceipt[]): void {
-    const node = this.requireCurrentLease(nodeId, leaseId);
+  verifyNode(nodeId: string, leaseId: string, candidateRevision: string, evidence: EvidenceReceipt[], now = Date.now()): void {
+    const node = this.requireCurrentLease(nodeId, leaseId, now);
     validateEvidence(node, candidateRevision, evidence);
     node.status = 'verified';
     node.verifiedRevision = candidateRevision;
@@ -148,17 +148,17 @@ export class RunController {
     delete node.lastFailure;
     delete node.invalidationReason;
     this.recomputeReadiness();
-    this.touch();
+    this.touch(now);
   }
 
-  failNode(nodeId: string, leaseId: string, reason: string): void {
-    const node = this.requireCurrentLease(nodeId, leaseId);
+  failNode(nodeId: string, leaseId: string, reason: string, now = Date.now()): void {
+    const node = this.requireCurrentLease(nodeId, leaseId, now);
     if (!reason.trim()) throw new ControllerError('INVALID_TRANSITION', 'Failure reason is required.');
     node.status = 'failed';
     node.lastFailure = reason;
     delete node.lease;
     this.recomputeReadiness();
-    this.touch();
+    this.touch(now);
   }
 
   invalidateNode(nodeId: string, reason: string): void {
@@ -193,9 +193,9 @@ export class RunController {
     return node;
   }
 
-  private requireCurrentLease(nodeId: string, leaseId: string): NodeRecord {
+  private requireCurrentLease(nodeId: string, leaseId: string, now: number): NodeRecord {
     const node = this.requireNode(nodeId);
-    if (node.status !== 'running' || node.lease?.id !== leaseId) {
+    if (node.status !== 'running' || node.lease?.id !== leaseId || node.lease.expiresAt <= now) {
       throw new ControllerError('STALE_LEASE', `Lease ${leaseId} is not current for node ${nodeId}.`);
     }
     return node;
