@@ -73,7 +73,7 @@ export function createServer(storeDirectory: string): McpServer {
     },
     async ({ runId, nodeId, leaseId, reason }) => execute(async () => {
       const controller = await requireRun(store, runId);
-      controller.failNode(nodeId, leaseId, reason);
+      controller.failNode(nodeId, leaseId, reason, Date.now());
       await store.save(controller.snapshot());
       return controller.getNode(nodeId);
     })
