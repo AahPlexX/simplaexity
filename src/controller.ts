@@ -55,7 +55,7 @@ export interface CreateRunInput {
   now?: string;
 }
 
-export type ControllerErrorCode = 'INVALID_GRAPH' | 'UNKNOWN_NODE' | 'INVALID_TRANSITION' | 'STALE_LEASE' | 'INVALID_EVIDENCE';
+export type ControllerErrorCode = 'INVALID_GRAPH' | 'INVALID_SNAPSHOT' | 'UNKNOWN_NODE' | 'INVALID_TRANSITION' | 'STALE_LEASE' | 'INVALID_EVIDENCE';
 
 export class ControllerError extends Error {
   readonly code: ControllerErrorCode;
@@ -95,7 +95,7 @@ export class RunController {
   }
 
   static restore(snapshot: RunSnapshot): RunController {
-    validateGraph(snapshot.nodes);
+    validateSnapshot(snapshot);
     return new RunController(cloneSnapshot(snapshot));
   }
 
@@ -216,6 +216,77 @@ export class RunController {
   }
 }
 
+function validateSnapshot(snapshot: unknown): asserts snapshot is RunSnapshot {
+  if (!isRecord(snapshot)) throw invalidSnapshot('Run snapshot must be an object.');
+  if (snapshot.schemaVersion !== 1) throw invalidSnapshot('Unsupported run snapshot schema version.');
+  if (!isNonEmptyString(snapshot.projectId) || !isNonEmptyString(snapshot.runId) || !isNonEmptyString(snapshot.sourceRevision)) {
+    throw invalidSnapshot('Run snapshot identity fields must be non-empty strings.');
+  }
+  if (!isDateString(snapshot.createdAt) || !isDateString(snapshot.updatedAt)) {
+    throw invalidSnapshot('Run snapshot timestamps must be valid date strings.');
+  }
+  if (!Array.isArray(snapshot.nodes)) throw invalidSnapshot('Run snapshot nodes must be an array.');
+
+  const nodes: NodeRecord[] = [];
+  for (const rawNode of snapshot.nodes) {
+    if (!isRecord(rawNode)) throw invalidSnapshot('Every persisted node must be an object.');
+    if (!isNonEmptyString(rawNode.id) || !isNodeKind(rawNode.kind)) throw invalidSnapshot('Persisted node identity or kind is invalid.');
+    if (!isStringArray(rawNode.dependsOn) || !isStringArray(rawNode.acceptanceChecks) || rawNode.acceptanceChecks.length === 0) {
+      throw invalidSnapshot(`Persisted node ${rawNode.id} has invalid dependency or acceptance-check arrays.`);
+    }
+    if (!isNodeStatus(rawNode.status) || !Number.isInteger(rawNode.attempt) || (rawNode.attempt as number) < 0) {
+      throw invalidSnapshot(`Persisted node ${rawNode.id} has invalid status or attempt state.`);
+    }
+    if (rawNode.lease !== undefined && !isExecutionLease(rawNode.lease)) throw invalidSnapshot(`Persisted node ${rawNode.id} has an invalid lease.`);
+    if (rawNode.verifiedRevision !== undefined && !isNonEmptyString(rawNode.verifiedRevision)) throw invalidSnapshot(`Persisted node ${rawNode.id} has an invalid verified revision.`);
+    if (rawNode.evidence !== undefined && (!Array.isArray(rawNode.evidence) || !rawNode.evidence.every(isEvidenceReceipt))) {
+      throw invalidSnapshot(`Persisted node ${rawNode.id} has invalid evidence.`);
+    }
+    if (rawNode.lastFailure !== undefined && !isNonEmptyString(rawNode.lastFailure)) throw invalidSnapshot(`Persisted node ${rawNode.id} has an invalid failure reason.`);
+    if (rawNode.invalidationReason !== undefined && !isNonEmptyString(rawNode.invalidationReason)) throw invalidSnapshot(`Persisted node ${rawNode.id} has an invalid invalidation reason.`);
+    nodes.push(rawNode as unknown as NodeRecord);
+  }
+
+  try {
+    validateGraph(nodes);
+  } catch (error) {
+    throw invalidSnapshot(error instanceof Error ? error.message : 'Persisted graph is invalid.');
+  }
+
+  const byId = new Map(nodes.map((node) => [node.id, node]));
+  for (const node of nodes) {
+    const hasVerifiedDependencies = node.dependsOn.every((dependencyId) => byId.get(dependencyId)?.status === 'verified');
+
+    if (node.status === 'running') {
+      if (!node.lease) throw invalidSnapshot(`Running node ${node.id} is missing its lease.`);
+      if (node.lease.nodeId !== node.id || node.lease.attempt !== node.attempt) throw invalidSnapshot(`Running node ${node.id} has a mismatched lease.`);
+    } else if (node.lease) {
+      throw invalidSnapshot(`Non-running node ${node.id} cannot retain a lease.`);
+    }
+
+    if (node.status === 'verified') {
+      if (!node.verifiedRevision || !node.evidence) throw invalidSnapshot(`Verified node ${node.id} is missing revision-bound evidence.`);
+      try {
+        validateEvidence(node, node.verifiedRevision, node.evidence);
+      } catch {
+        throw invalidSnapshot(`Verified node ${node.id} has invalid revision-bound evidence.`);
+      }
+    } else if (node.verifiedRevision !== undefined || node.evidence !== undefined) {
+      throw invalidSnapshot(`Non-verified node ${node.id} cannot retain verification evidence.`);
+    }
+
+    if (node.status === 'failed' && !node.lastFailure) throw invalidSnapshot(`Failed node ${node.id} is missing its failure reason.`);
+    if (node.status === 'stale' && !node.invalidationReason) throw invalidSnapshot(`Stale node ${node.id} is missing its invalidation reason.`);
+
+    if ((node.status === 'ready' || node.status === 'running' || node.status === 'verified' || node.status === 'failed') && !hasVerifiedDependencies) {
+      throw invalidSnapshot(`Node ${node.id} cannot be ${node.status} while a prerequisite is unverified.`);
+    }
+    if (node.status === 'blocked' && hasVerifiedDependencies) {
+      throw invalidSnapshot(`Blocked node ${node.id} has no unverified prerequisite.`);
+    }
+  }
+}
+
 function validateGraph(nodes: readonly NodeDefinition[]): void {
   const ids = new Set<string>();
   const indegree = new Map<string, number>();
@@ -278,6 +349,52 @@ function requireFiniteTimestamp(now: number): void {
   if (!Number.isFinite(now)) throw new ControllerError('INVALID_TRANSITION', 'Timestamp must be a finite number.');
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === 'string' && value.trim().length > 0;
+}
+
+function isDateString(value: unknown): value is string {
+  return isNonEmptyString(value) && Number.isFinite(Date.parse(value));
+}
+
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every(isNonEmptyString);
+}
+
+function isNodeKind(value: unknown): value is NodeKind {
+  return value === 'planning' || value === 'implementation' || value === 'verification' || value === 'delivery';
+}
+
+function isNodeStatus(value: unknown): value is NodeStatus {
+  return value === 'blocked' || value === 'ready' || value === 'running' || value === 'verified' || value === 'failed' || value === 'stale';
+}
+
+function isExecutionLease(value: unknown): value is ExecutionLease {
+  if (!isRecord(value)) return false;
+  return isNonEmptyString(value.id)
+    && isNonEmptyString(value.nodeId)
+    && isNonEmptyString(value.workerId)
+    && Number.isInteger(value.attempt)
+    && (value.attempt as number) > 0
+    && typeof value.issuedAt === 'number'
+    && Number.isFinite(value.issuedAt)
+    && typeof value.expiresAt === 'number'
+    && Number.isFinite(value.expiresAt)
+    && value.expiresAt > value.issuedAt;
+}
+
+function isEvidenceReceipt(value: unknown): value is EvidenceReceipt {
+  if (!isRecord(value)) return false;
+  return isNonEmptyString(value.checkId)
+    && (value.outcome === 'passed' || value.outcome === 'failed')
+    && isNonEmptyString(value.candidateRevision)
+    && isDateString(value.observedAt);
+}
+
 function copyDefinition(definition: NodeDefinition): NodeDefinition {
   return {
     id: definition.id,
@@ -303,4 +420,8 @@ function cloneSnapshot(snapshot: RunSnapshot): RunSnapshot {
 
 function invalidGraph(message: string): ControllerError {
   return new ControllerError('INVALID_GRAPH', message);
+}
+
+function invalidSnapshot(message: string): ControllerError {
+  return new ControllerError('INVALID_SNAPSHOT', message);
 }
