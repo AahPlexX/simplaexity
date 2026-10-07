@@ -24,12 +24,7 @@ jobs:
           version: 12.10.1
           run_install: false
       - name: Install
-        run: pnpm install --no-frozen-lockfile
-      - name: Capture generated lockfile
-        uses: actions/upload-artifact@v7.0.1
-        with:
-          path: pnpm-lock.yaml
-          archive: false
+        run: pnpm install --frozen-lockfile
       - name: Typecheck
         run: pnpm typecheck
       - name: Test
