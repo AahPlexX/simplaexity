@@ -1,5 +1,13 @@
 # Decisions
 
+## 2026-10-07 — Reproducible dependency and CI execution
+
+**Decision:** Commit the byte-exact pnpm-generated lockfile, install with `pnpm install --frozen-lockfile` in CI, and pin third-party GitHub Actions by full commit SHA while retaining the human-readable release tag as a comment.
+
+**Rationale:** The frozen install makes package-manifest/lockfile drift fail closed. Full action SHAs prevent mutable action tags from silently changing workflow implementation. The lockfile must be preserved exactly as generated because pnpm 12 records both package-manager and project dependency state.
+
+**Verification:** GitHub Actions run `37667444174` on revision `ea0692174b80b2c75e30e71a63c1f5dc140b44d1` passed frozen installation, pnpm supply-chain policy verification for 26 lockfile entries, strict typecheck, and 14/14 tests.
+
 ## 2026-10-06 — Governed documentation
 
 **Decision:** `PRD.md` is functional scope, `TODO.md` is execution state, and the supporting docs defined in `docs/DOCUMENTATION_STANDARD.md` must stay synchronized with behavior-changing commits.
