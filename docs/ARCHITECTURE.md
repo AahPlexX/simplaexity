@@ -6,6 +6,6 @@ Foundation topology:
 
 `user outcome -> durable controller -> validated dependency graph -> execution lease -> worker candidate -> trusted verifier boundary -> evidence receipt -> controlled delivery boundary`
 
-The first persistence layer is atomic JSON per run. It is intentionally single-controller-writer only. Migration trigger: before multiple controller replicas or concurrent writers are enabled, replace the file store with transactional shared storage and preserve lease fencing semantics.
+`src/controller.ts` owns graph validation, node state, lease fencing, evidence checks, and invalidation. `src/store.ts` persists run snapshots by atomic file replacement. `src/server.ts` exposes worker-safe MCP tools; it intentionally does not expose `verify_node`. `src/index.ts` uses the SDK's `serveStdio` factory entry so one server implementation can serve modern 2026-07-28 and supported legacy-era openings.
 
-The public worker MCP surface begins with stdio and the official `@modelcontextprotocol/server` v2 SDK. Protocol handlers remain thin; state-transition policy belongs in `RunController`.
+The file store is intentionally single-controller-writer only. Migration trigger: before multiple controller replicas or concurrent writers are enabled, replace it with transactional shared storage and preserve fencing semantics.
